@@ -2,58 +2,53 @@ import logging
 from typing import List
 
 from langchain_redis import RedisChatMessageHistory
-from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_core.messages import BaseMessage
-from langchain.memory import ConversationSummaryBufferMemory
+from langchain_core.messages.utils import count_tokens_approximately
+from langmem.short_term import SummarizationNode
+
+from backend.services.llm_service import LLMService
+from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
 OUTPUT_DIR = "output"
 
-
 class MemoryService:
     def __init__(
-        self, redis_url: str, session_id: str, memory_key: str = "chat_history"
+        self,
+        session_id: str,
     ) -> None:
-        self.redis_url = redis_url
         self.session_id = session_id
-        self.memory_key = memory_key
+
+        self.redis_url = settings.redis_url
+        self.ttl = settings.memory_ttl
+        self.memory_key = settings.memory_key
+
+        llm_service = LLMService()
+        self.llm = llm_service.llm
 
         self._chat_history = RedisChatMessageHistory(
-            redis_url=redis_url, session_id=session_id, ttl=1800  # 30 minutes
+            redis_url=self.redis_url,
+            session_id=self.session_id,
+            ttl=self.ttl,
         )
 
-        self._llm_service = None
-        self._memory = None
+        # self._memory = ConversationSummaryBufferMemory(
+        #     llm=self.llm,
+        #     chat_memory=self._chat_history,
+        #     memory_key=self.memory_key,
+        #     return_messages=True,
+        # )
 
-    @property
-    def llm_service(self):
-        if self._llm_service is None:
-            from backend.services.llm_service import LLMService
-            from backend.config import settings
+        # summarization_model = self.llm.bind(max_tokens=128)
 
-            base_url = settings.ollama_base_url
-            model = settings.ollama_model
-
-            self._llm_service = LLMService(base_url=base_url, model=model)
-            logger.info(f"Initialized LLM service with model: {model}")
-
-        return self._llm_service
-
-    @property
-    def memory(self):
-        """Lazy initialization of memory"""
-        if self._memory is None:
-            self._memory = ConversationSummaryBufferMemory(
-                llm=self.llm_service.llm,
-                chat_memory=self._chat_history,
-                max_token_limit=2000,
-                return_messages=True,
-                memory_key=self.memory_key,
-            )
-            logger.info(f"Initialized memory for session: {self.session_id}")
-
-        return self._memory
+        # self._memory = SummarizationNode(
+        #     token_counter=count_tokens_approximately,
+        #     model=summarization_model,
+        #     max_tokens=256,
+        #     max_tokens_before_summary=256,
+        #     max_summary_tokens=128,
+        # ) 
 
     def add_message(self, message: BaseMessage) -> None:
         try:
@@ -81,8 +76,17 @@ class MemoryService:
             logger.error(f"Error clearnig chat history: {str(e)}")
 
     def get_memory_variables(self) -> dict:
+        # try:
+        #     return self._memory.load_memory_variables({})
+        # except Exception as e:
+        #     logger.error(f"Error getting memory variables: {str(e)}")
+        #     return {self.memory_key: ""}
+    
         try:
-            return self.memory.load_memory_variables({})
+            messages = self._chat_history.messages
+            chat_history = "\n".join([f"{msg.type}: {msg.content}" for msg in messages])
+            return {self.memory_key: chat_history}
+
         except Exception as e:
             logger.error(f"Error getting memory variables: {str(e)}")
             return {self.memory_key: ""}

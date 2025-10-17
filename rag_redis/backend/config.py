@@ -1,5 +1,3 @@
-import os
-from typing import Optional
 from pydantic_settings import BaseSettings
 
 
@@ -7,6 +5,7 @@ class Settings(BaseSettings):
     # Redis Configuration
     redis_url: str = "redis://localhost:6379"
     redis_cache_ttl: int = 3600  # 1 hour
+    redis_distance_threshold: float = 0.2
 
     # Ollama Configuration
     ollama_base_url: str = "http://localhost:11434"
@@ -29,6 +28,9 @@ class Settings(BaseSettings):
     # Chunking Configuration
     chunk_size: int = 1000
     chunk_overlap: int = 200
+
+    # Models Folder
+    cache_folder: str = "models"
 
     class Config:
         env_file = ".env"

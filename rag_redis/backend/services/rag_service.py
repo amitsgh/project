@@ -6,16 +6,23 @@ from langchain_core.runnables import RunnablePassthrough, Runnable
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from backend.services.llm_service import LLMService
+from backend.services.redis_service import RedisService
+from backend.services.memory_service import MemoryService
+
 logger = logging.getLogger(__name__)
 
 
 class RAGService:
-    def __init__(self, llm_service, redis_service, memory_service):
-        self.llm_service = llm_service
-        self.redis_service = redis_service
-        self.memory_service = memory_service
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+
+        self.llm_service = LLMService()
+        self.redis_service = RedisService()
+        self.memory_service = MemoryService(self.session_id)
 
         self.rag_chain = self._create_qa_chain()
+        logger.info(f"RAGService initialized for session: {session_id}")
 
     def _create_qa_chain(self) -> Runnable:
         prompt_template = ChatPromptTemplate.from_messages(

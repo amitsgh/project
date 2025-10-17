@@ -8,13 +8,11 @@ from contextlib import asynccontextmanager
 from backend.services.redis_service import RedisService
 from backend.services.memory_service import MemoryService
 from backend.services.llm_service import LLMService
-from backend.services.rag_service import RAGService
 from backend.services.cache_service import CacheService
+from backend.services.rag_service import RAGService
 from backend.services.document_service import DocumentService
 
 from backend.utils.utils import timer
-
-from backend.config import settings
 
 from backend.logging_config import setup_logging
 
@@ -26,24 +24,22 @@ logger = logging.getLogger(__name__)
 redis_service = None
 llm_service = None
 cache_service = None
-document_service = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global redis_service, llm_service, cache_service, document_service
+    global redis_service, llm_service, cache_service
 
     try:
-        redis_service = RedisService(
-            settings.redis_url, settings.index_name, settings.indexing
-        )
-        llm_service = LLMService(settings.ollama_base_url, settings.ollama_model)
-        cache_service = CacheService(settings.redis_url, settings.redis_cache_ttl)
-        document_service = DocumentService()
 
+        redis_service = RedisService()
+        llm_service = LLMService()
+        cache_service = CacheService()
+        
         if redis_service.is_connected():
             existing_docs = redis_service.similarity_search("test", top_k=1)
             if not existing_docs:
+                document_service = DocumentService()
                 sample_docs = document_service.get_sample_documents()
                 redis_service.add_documents(sample_docs)
                 logger.info("Documents Initialized")
@@ -74,27 +70,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-def get_memory_service(session_id: str):
-    return MemoryService(settings.redis_url, session_id)
-
-
-def get_rag_service(session_id: str):
-    memory_service = get_memory_service(session_id)
-    return RAGService(llm_service, redis_service, memory_service)
-
-
 @app.get("/")
 async def root():
-    return {
-        "message": "LangChain + Redis AI System is running!",
-        "status": "healthy",
-        "services": {
-            "redis_service": redis_service.is_connected() if redis_service else False,
-            "llm_service": llm_service is not None,
-            "cache_service": cache_service is not None,
-        },
-    }
+    try:        
+        return {
+            "message": "LangChain + Redis AI System is running!",
+            "status": "healthy",
+            "services": {
+                "redis_service": redis_service.is_connected(),
+                "llm_service": llm_service is not None,
+                "cache_service": cache_service is not None,
+            },
+        }
+
+    except Exception as e:
+        return {
+            "message": "LangChain + Redis AI System is running!",
+            "status": "degraded",
+            "error": str(e)
+        }
 
 
 @app.post("/chat")
@@ -102,13 +96,11 @@ async def root():
 async def chat(
     question: str,
     session_id: str = "default",
-    use_cache: bool = True,
     use_memory: bool = True,
     use_vector_search: bool = True,
 ):
     try:
-        rag_service = get_rag_service(session_id)
-
+        rag_service = RAGService(session_id)
         response = rag_service.generate(
             question=question,
             use_memory=use_memory,
@@ -125,7 +117,7 @@ async def chat(
 @app.post("/clear-memory/{session_id}")
 async def clear_memory(session_id: str):
     try:
-        memory_service = get_memory_service(session_id)
+        memory_service = MemoryService(session_id)
         memory_service.clear_memory()
         return {"message": f"Memory cleared for session: {session_id}"}
 

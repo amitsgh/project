@@ -1,23 +1,28 @@
 import logging
 
 from langchain_redis.cache import RedisSemanticCache
-from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.globals import set_llm_cache
+
+from backend.services.embedding_service import EmbeddingService
+from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class CacheService:
-    def __init__(self, redis_url: str, ttl: int = 3600):
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
-        )
+    def __init__(self):
+        self.redis_url = settings.redis_url
+        self.ttl = settings.redis_cache_ttl
+        self.distance_threshold = settings.redis_distance_threshold
+
+        embedding_service = EmbeddingService()
+        self.embeddings = embedding_service.embeddings
 
         self.semantic_cache = RedisSemanticCache(
-            redis_url=redis_url,
+            redis_url=self.redis_url,
             embeddings=self.embeddings,
-            distance_threshold=0.2,
-            ttl=ttl
+            distance_threshold=self.distance_threshold,
+            ttl=self.ttl
         )
 
         set_llm_cache(self.semantic_cache)

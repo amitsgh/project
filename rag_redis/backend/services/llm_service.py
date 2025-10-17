@@ -1,23 +1,47 @@
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from langchain_ollama import OllamaLLM
 from langchain.schema import BaseMessage, HumanMessage, SystemMessage
+
+from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class LLMService:
-    def __init__(
-        self, base_url: str, model: str, temperatur: int = 0.7, num_predict: int = 1000
-    ) -> None:
-        self.llm = OllamaLLM(
-            base_url=base_url,
-            model=model,
-            temperature=temperatur,
-            num_predict=num_predict,
-        )
-        self.model_name = model
+    _instance: Optional["LLMService"] = None
+    _llm: Optional[OllamaLLM] = None
+
+    base_url = None
+    model_name = None
+    temperature = None
+    num_predict = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(LLMService, cls).__new__(cls)
+            cls._instance.base_url = settings.ollama_base_url
+            cls._instance.model_name = settings.ollama_model
+            cls._instance.temperature = settings.temperature
+            cls._instance.num_predict = settings.max_tokens
+            logger.info(f"LLMService configured with model: {cls._instance.model_name}")
+
+        return cls._instance
+
+    @property
+    def llm(self) -> OllamaLLM:
+        if self._llm is None:
+            logger.info(f"Initializing Ollama LLM: {self.model_name}")
+            self._llm = OllamaLLM(
+                base_url=self.base_url,
+                model=self.model_name,
+                temperature=self.temperature,
+                num_predict=self.num_predict,
+            )
+            logger.info(f"Ollama LLM '{self.model_name}' initialized successfully")
+
+        return self._llm
 
     def _format_messages(self, messages: List[BaseMessage]) -> str:
         formatted = []

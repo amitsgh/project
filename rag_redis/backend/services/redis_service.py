@@ -3,7 +3,9 @@ from typing import List
 
 from langchain.schema import Document
 from langchain_redis import RedisVectorStore
-from langchain_community.embeddings import HuggingFaceEmbeddings
+
+from backend.services.embedding_service import EmbeddingService
+from backend.config import settings
 
 import redis
 
@@ -13,20 +15,21 @@ OUTPUT_DIR = "models"
 
 
 class RedisService:
-    def __init__(
-        self, redis_url: str, index_name: str, indexing_algorithm: str = "FLAT"
-    ):
-        self.redis_url = redis_url
-        self.redis_client = redis.from_url(redis_url)
-        self.embedding = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2", cache_folder=OUTPUT_DIR
-        )
+    def __init__(self):
+        self.redis_url = settings.redis_url
+        self.index_name = settings.index_name
+        self.indexing = settings.indexing
+
+        self.redis_client = redis.from_url(self.redis_url)
+
+        embedding_service = EmbeddingService()
+        self.embeddings = embedding_service.embeddings
 
         self.vector_store = RedisVectorStore(
-            redis_url=redis_url,
-            index_name=index_name,
-            indexing_algorithm=indexing_algorithm,
-            embeddings=self.embedding,
+            redis_url=self.redis_url,
+            index_name=self.index_name,
+            indexing_algorithm=self.indexing,
+            embeddings=self.embeddings,
         )
 
     def add_documents(self, documents: List[Document]):

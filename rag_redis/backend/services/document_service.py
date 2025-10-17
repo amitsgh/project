@@ -1,17 +1,23 @@
 from typing import List, Dict, Any
 import logging
 
-from huggingface_hub import try_to_load_from_cache
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentService:
-    def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200):
+    def __init__(self):
+        self.chunk_size = settings.chunk_size
+        self.chunk_overlap = settings.chunk_overlap
+
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size, chunk_overlap=chunk_overlap, length_function=len
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap,
+            length_function=len,
         )
 
     def create_documents_from_texts(
